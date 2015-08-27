@@ -2,11 +2,14 @@ module Syntax(Term(..),
               app, lam, var, n, d, p,
               dis, neg, con, imp, iff, forall, exists,
               typeOf,
-              freeVars,
-              Type,
-              leftType, rightType) where
+              isLam,
+              getLamVar, getLamTerm,
+              freeVars, occursIn, boundIn,
+              contract, renameVar) where
 
-import Data.List as L
+import Data.Set as S
+
+import Type
 
 data Term
   = App Term Term
@@ -49,13 +52,55 @@ typeOf Dis = func o (func o o)
 typeOf Neg = func o o
 typeOf (Pi t) = func (func t o) o
 
-freeVars :: Term -> [TVar]
-freeVars (Var v) = [v]
-freeVars (App l r) = freeVars l ++ freeVars r
-freeVars (Lam v t) = L.filter (\a -> a /= v) $ freeVars t
-freeVars Neg = []
-freeVars Dis = []
-freeVars (Pi _) = []
+isLam (Lam _ _) = True
+isLam _ = False
+
+getLamVar (Lam v _) = v
+getLamTerm (Lam _ t) = t
+
+occursIn v t = S.member v $ S.union (boundVars t) (freeVars t)
+
+freeVars :: Term -> Set TVar
+freeVars (Var v) = S.singleton v
+freeVars (App l r) = S.union (freeVars l) (freeVars r)
+freeVars (Lam v t) = S.filter (\a -> a /= v) $ freeVars t
+freeVars Neg = S.empty
+freeVars Dis = S.empty
+freeVars (Pi _) = S.empty
+
+boundIn v t = S.member v $ boundVars t
+
+boundVars :: Term -> Set TVar
+boundVars (Lam v t) = S.union (S.singleton v) $ boundVars t
+boundVars _ = S.empty
+
+-- Lambda conversion functions
+renameVar t r (App a b) = App (renameVar t r a) (renameVar t r b)
+renameVar t r (Lam v b) =
+  case v == t of
+   True -> Lam r (renameVar t r b)
+   False -> Lam v (renameVar t r b)
+renameVar t r (Var x) =
+  case x == t of
+   True -> Var r
+   False -> Var x
+renameVar _ _ t = t
+
+subsTerm target result t =
+  case t == target of
+   True -> result
+   False ->
+     case t of
+      (App a b) -> App (subsTerm target result a) (subsTerm target result b)
+      (Lam v t) -> Lam v $ subsTerm target result t
+      _ -> t
+
+contract t@(App (Lam x b) a) =
+  case (not $ boundIn x b) &&
+       (S.intersection (boundVars b) (freeVars a) == S.empty) of
+   True -> subsTerm (Var x) a b
+   False -> error $ "contract: bad argument " ++ show t
+contract t = error $ "contract: bad argument " ++ show t
 
 data TVar = TVar String Type
           deriving (Eq, Ord)
@@ -63,23 +108,6 @@ data TVar = TVar String Type
 tVar n t = TVar n t
 
 varType (TVar _ t) = t
-
-data Type
-  = O
-  | I
-  | Func Type Type
-    deriving (Eq, Ord)
-
-o = O
-i = I
-func l r = Func l r
-
-isFuncType (Func _ _) = True
-isFuncType _ = False
-
-rightType (Func _ r) = r
-
-leftType (Func l _) = l
 
 instance Show Term where
   show (App l r) = "[" ++ show l ++ " " ++ show r ++ "]"
@@ -89,12 +117,5 @@ instance Show Term where
   show Dis = "\\/"
   show (Pi t) = "@"
 
-instance Show Type where
-  show O = "o"
-  show I = "i"
-  show (Func l r) = "(" ++ show r ++ show l ++ ")"
-
 instance Show TVar where
-  show (TVar n I) = n ++ "(" ++ show I ++ ")"
-  show (TVar n O) = n ++ "(" ++ show O ++ ")"
   show (TVar n t) = n ++ show t

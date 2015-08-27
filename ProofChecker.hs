@@ -3,6 +3,7 @@ module ProofChecker() where
 import Data.List as L
 
 import Syntax
+import Type
 
 data Theorem
   = Theorem Term
@@ -23,7 +24,26 @@ ax_forall_dist pred f x = thm $
   (dis pred (app (p (leftType $ typeOf f)) f))
 
 -- Inference rules
--- TODO: Add rules for lambda conversion
+in_rename tp y =
+   case isLam $ thmTerm tp of
+    True ->
+      let t = thmTerm tp
+          v = getLamVar t
+          lt = getLamTerm t in
+       case (not $ occursIn y lt) && (not $ boundIn v lt) of
+        True -> thm $ Lam y $ renameVar v y lt
+        False -> error $ "in_rename: bad arguments " ++ show tp ++ " " ++ show y
+    False -> error $ "in_rename: bad argument " ++ show tp
+
+in_contract tp =
+  thm $ contract $ thmTerm tp
+
+in_expand c td a =
+  case contract (app (thmTerm td) a) == c of
+   True -> thm c
+   False ->
+     error $ "in_expand: bad arguments " ++ show c ++ " " ++ show td ++ " " ++ show a
+
 in_mp tp tq =
   let p = thmTerm tp
       q = thmTerm tq in
