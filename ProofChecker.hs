@@ -1,4 +1,7 @@
-module ProofChecker() where
+module ProofChecker(
+  thmTerm,
+  in_mp,
+  ax_disp, ax_impp, ax_rm_dis) where
 
 import Data.List as L
 
@@ -50,7 +53,7 @@ in_mp tp tq =
    case p of
     (App (App Dis (App Neg a)) b) ->
       case a == q of
-       True -> thm q
+       True -> thm b
        False -> error $ "in_mp: bad arguments " ++ show p ++ " " ++ show q
     _ -> error $ "in_mp: bad arguments " ++ show p ++ " " ++ show q
 

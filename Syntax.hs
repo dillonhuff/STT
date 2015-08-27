@@ -5,7 +5,9 @@ module Syntax(Term(..),
               isLam,
               getLamVar, getLamTerm,
               freeVars, occursIn, boundIn,
-              contract, renameVar) where
+              contract, renameVar,
+              TVar,
+              tVar) where
 
 import Data.Set as S
 
